@@ -36,9 +36,12 @@ jobs:
       shell: powershell
       run: |
         $proj = Get-ChildItem -Recurse *.vcxproj | Select -First 1
-        (Get-Content $proj.FullName) `
-        -replace '\\directx\\directx.cpp','directx\directx.cpp' `
-        | Set-Content $proj.FullName
+        
+        # Читаем весь файл в память как одну строку
+        $content = Get-Content $proj.FullName -Raw
+        
+        # Делаем замену и сохраняем обратно с правильной кодировкой UTF-8
+        $content -replace '\\directx\\directx.cpp','directx\directx.cpp' | Set-Content $proj.FullName -Encoding UTF8
 
     - name: Build
       shell: powershell
