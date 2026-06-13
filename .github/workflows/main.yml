@@ -3,51 +3,39 @@ name: Build DLL
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Build Dependencies
+    - name: Fix project paths
       shell: powershell
       run: |
-        # Клонируем зависимости (Protobuf сразу со всеми подмодулями Abseil)
-        git clone --depth 1 --recurse-submodules https://github.com/protocolbuffers/protobuf.git deps/protobuf
-        git clone --depth 1 https://github.com/freetype/freetype.git deps/freetype
+        # Прямая правка пути без поиска файла vcxproj
+        (Get-Content darkside_sdk\darkside_sdk.vcxproj) -replace '\\directx\\directx.cpp','directx\directx.cpp' | Set-Content darkside_sdk\darkside_sdk.vcxproj
 
-        # Собираем Protobuf
-        cmake -S deps/protobuf/cmake -B deps/protobuf/build -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_SHARED_LIBS=OFF
-        cmake --build deps/protobuf/build --config Release
-
-        # Собираем FreeType
-        cmake -S deps/freetype -B deps/freetype/build -DFT_DISABLE_HARFBUZZ=ON
-        cmake --build deps/freetype/build --config Release
-
-    - name: Fix Project File
+    - name: Build
       shell: powershell
       run: |
-        # Читаем файл проекта, правим кривой путь к directx и вшиваем пути к инклудам библиотек
-        $xml = Get-Content darkside_sdk\darkside_sdk.vcxproj
-        $xml = $xml -replace '\\directx\\', '..\directx\'
-        $xml = $xml -replace '<AdditionalIncludeDirectories>', '<AdditionalIncludeDirectories>$(SolutionDir)deps\protobuf\src;$(SolutionDir)deps\protobuf\third_party\abseil-cpp;$(SolutionDir)deps\freetype\include;'
-        $xml | Set-Content darkside_sdk\darkside_sdk.vcxproj
+        # Прямой запуск msbuild для конкретного файла .sln
+        msbuild darkside_sdk.sln `
+          /m `
+          /p:Configuration=Release `
+          /p:Platform=x64 `
+          /p:PlatformToolset=v143 `
+          /p:VisualStudioVersion=17.0 `
+          /p:IncludePath="$pwd\deps\protobuf\src;$pwd\deps\freetype\include"
 
-    - name: Build Solution
-      run: msbuild darkside_sdk.sln /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
-
-    - name: Upload Artifacts
+    - name: Upload
       uses: actions/upload-artifact@v4
       with:
         name: dll-build
         path: |
-          **/x64/Release/*.dll
           **/Release/*.dll
-        if-no-files-found: error
