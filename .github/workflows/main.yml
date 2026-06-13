@@ -2,8 +2,7 @@ name: Build C++ DLL
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   pull_request:
   workflow_dispatch:
 
@@ -12,34 +11,53 @@ jobs:
     runs-on: windows-2022
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE 'vcpkg'
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
+          if (!(Test-Path $vcpkgRoot)) {
+            git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+          }
 
-    - name: Install libraries
-      shell: cmd
-      run: |
-        vcpkg install protobuf:x64-windows
-        vcpkg install freetype:x64-windows
+          & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
+          & "$vcpkgRoot\vcpkg.exe" install protobuf:x64-windows freetype:x64-windows
 
-    - name: Build
-      shell: cmd
-      run: |
-        msbuild darkside_sdk.sln ^
-        /m ^
-        /p:Configuration=Release ^
-        /p:Platform=x64 ^
-        /p:VcpkgEnabled=true
+      - name: Build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = $env:GITHUB_WORKSPACE
+          $vcpkgRoot = Join-Path $repo 'vcpkg'
 
-    - name: Upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: darkside_sdk
-        path: |
-          **/*.dll
+          $includeDirs = @(
+            "$repo\darkside_sdk\sdk\includes\imgui\freetype\include"
+            "$repo\darkside_sdk\sdk\includes\imgui"
+            "$vcpkgRoot\installed\x64-windows\include"
+          ) -join ';'
+
+          $libraryDirs = @(
+            "$repo\darkside_sdk\sdk\includes\imgui\freetype"
+            "$repo\darkside_sdk\sdk\includes\imgui"
+            "$vcpkgRoot\installed\x64-windows\lib"
+          ) -join ';'
+
+          msbuild "$repo\darkside_sdk.sln" /m `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:AdditionalIncludeDirectories="$includeDirs" `
+            /p:AdditionalLibraryDirectories="$libraryDirs"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: darkside_sdk-release
+          path: output\Release\*.dll
+          if-no-files-found: error
