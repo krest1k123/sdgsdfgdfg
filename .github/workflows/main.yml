@@ -3,50 +3,63 @@ name: Build DLL
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
 
-      - name: Find Solution
-        shell: powershell
-        run: |
-          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
+    - name: Install dependencies
+      shell: powershell
+      run: |
+        git clone --depth 1 https://github.com/protocolbuffers/protobuf.git deps/protobuf
+        git clone --depth 1 https://github.com/freetype/freetype.git deps/freetype
 
-          if (-not $sln) {
-            Write-Error "No .sln file found in the repository."
-            exit 1
-          }
+        cmake -S deps/protobuf/cmake -B deps/protobuf/build `
+          -Dprotobuf_BUILD_TESTS=OFF `
+          -Dprotobuf_BUILD_SHARED_LIBS=OFF
 
-          Write-Host "Found solution: $($sln.FullName)"
-          "SOLUTION=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+        cmake --build deps/protobuf/build --config Release
 
-      - name: Build Solution
-        shell: powershell
-        run: |
-          msbuild "$env:SOLUTION" /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:VisualStudioVersion=17.0
+        cmake -S deps/freetype -B deps/freetype/build `
+          -DFT_DISABLE_HARFBUZZ=ON
 
-      - name: Find Build Output
-        shell: powershell
-        run: |
-          Get-ChildItem -Recurse -Filter *.dll | Select-Object FullName
+        cmake --build deps/freetype/build --config Release
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dll-build
-          path: |
-            **/x64/Release/*.dll
-            **/Release/*.dll
-            **/output/Release/*.dll
-          if-no-files-found: error
+
+    - name: Fix project paths
+      shell: powershell
+      run: |
+        $proj = Get-ChildItem -Recurse *.vcxproj | Select -First 1
+
+        (Get-Content $proj.FullName) `
+        -replace '\\directx\\directx.cpp','directx\directx.cpp' `
+        | Set-Content $proj.FullName
+
+
+    - name: Build
+      shell: powershell
+      run: |
+        $sln = Get-ChildItem -Recurse *.sln | Select -First 1
+
+        msbuild $sln.FullName `
+          /m `
+          /p:Configuration=Release `
+          /p:Platform=x64 `
+          /p:PlatformToolset=v143 `
+          /p:VisualStudioVersion=17.0 `
+          /p:IncludePath="$pwd\deps\protobuf\src;$pwd\deps\freetype\include"
+
+
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: dll-build
+        path: |
+          **/Release/*.dll
