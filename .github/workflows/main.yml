@@ -32,19 +32,20 @@ jobs:
 
         cmake --build deps/freetype/build --config Release
 
-
     - name: Fix project paths
       shell: powershell
       run: |
         $proj = Get-ChildItem -Recurse *.vcxproj | Select -First 1
-
         (Get-Content $proj.FullName) `
         -replace '\\directx\\directx.cpp','directx\directx.cpp' `
         | Set-Content $proj.FullName
 
-
     - name: Build
       shell: powershell
+      env:
+        # Устанавливаем пути через переменные окружения, чтобы избежать ошибки MSB1006
+        INCLUDE: "${{ github.workspace }}\\deps\\protobuf\\src;${{ github.workspace }}\\deps\\freetype\\include;${env:INCLUDE}"
+        LIB: "${{ github.workspace }}\\deps\\protobuf\\build\\Release;${{ github.workspace }}\\deps\\freetype\\build\\Release;${env:LIB}"
       run: |
         $sln = Get-ChildItem -Recurse *.sln | Select -First 1
 
@@ -53,9 +54,7 @@ jobs:
           /p:Configuration=Release `
           /p:Platform=x64 `
           /p:PlatformToolset=v143 `
-          /p:VisualStudioVersion=17.0 `
-          /p:IncludePath="$pwd\deps\protobuf\src;$pwd\deps\freetype\include"
-
+          /p:VisualStudioVersion=17.0
 
     - name: Upload
       uses: actions/upload-artifact@v4
