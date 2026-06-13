@@ -1,3 +1,78 @@
+krest1k
+beluga161215q
+•
+:thumbsup: дилдо в жопе
+
+скит юид 11
+ добавляет 
+krest1k
+ в группу. — 19:49
+скит юид 11
+ начинает звонок. — 19:49
+скит юид 11 [NL],  — 19:50
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+
+Новый текстовый документ (2).txt
+2 кб
+ахуевший летенант [Fe㏔ѹ],  — 19:51
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+krest1k [FMBS],  — 19:52
+~
+Изображение
+ахуевший летенант [Fe㏔ѹ],  — 19:52
+Изображение
+скит юид 11 [NL],  — 19:52
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+Изображение
+скит юид 11 [NL],  — 20:04
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+
+Новый текстовый документ (2).txt
+2 кб
 name: Build DLL
 
 on:
@@ -5,88 +80,158 @@ on:
   push:
     branches: [ main, master ]
 
+Новый текстовый документ (2).txt
+2 кб
+скит юид 11 [NL],  — 20:13
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+Новый текстовый документ (2).txt
+3 кб
+белуга
+ало
+krest1k [FMBS],  — 20:14
+xj
+скит юид 11 [NL],  — 20:19
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+Новый текстовый документ (2).txt
+3 кб
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+Новый текстовый документ (2).txt
+3 кб
+скит юид 11 [NL],  — 20:26
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+Новый текстовый документ (2).txt
+4 кб
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+Новый текстовый документ (2).txt
+4 кб
+скит юид 11 [NL],  — 20:33
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+
+Новый текстовый документ (2).txt
+4 кб
+﻿
+name: Build DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ]
+
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Install dependencies
-      shell: pwsh
+    - name: Install Dependencies
+      shell: powershell
       run: |
-        git clone --depth 1 https://github.com/protocolbuffers/protobuf.git deps/protobuf
+        Write-Host "Cloning dependencies..."
+        # Клонируем Protobuf обязательно с подмодулями (--recurse-submodules), чтобы скачалась absl
+        git clone --depth 1 --recurse-submodules https://github.com/protocolbuffers/protobuf.git deps/protobuf
         git clone --depth 1 https://github.com/freetype/freetype.git deps/freetype
 
-        cmake -S deps/protobuf/cmake -B deps/protobuf/build `
-          -Dprotobuf_BUILD_TESTS=OFF `
-          -Dprotobuf_BUILD_SHARED_LIBS=OFF
-
+        Write-Host "Building Protobuf (Release)..."
+        cmake -S deps/protobuf/cmake -B deps/protobuf/build -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_SHARED_LIBS=OFF
         cmake --build deps/protobuf/build --config Release
 
-        cmake -S deps/freetype -B deps/freetype/build `
-          -DFT_DISABLE_HARFBUZZ=ON
-
+        Write-Host "Building FreeType (Release)..."
+        cmake -S deps/freetype -B deps/freetype/build -DFT_DISABLE_HARFBUZZ=ON
         cmake --build deps/freetype/build --config Release
 
-    - name: Fix project paths
-      shell: pwsh
+    - name: Patch Project Paths
+      shell: powershell
       run: |
-        # Ищем файл .vcxproj только вашего проекта, игнорируя сгенерированные файлы в deps
-        $proj = Get-ChildItem -Recurse *.vcxproj | Where-Object { $_.FullName -notmatch 'deps' } | Select -First 1
+        # Ищем главный файл .vcxproj вашего проекта, игнорируя сгенерированные файлы в deps
+        $proj = Get-ChildItem -Recurse *.vcxproj | Where-Object { $_.FullName -notmatch 'deps' } | Select-Object -First 1
 
         if ($proj) {
-            Write-Host "Working on project file: $($proj.FullName)"
-            $content = Get-Content $proj.FullName -Raw
-            
-            # Заменяем все ошибочные пути вида \directx\ на относительные directx\ везде в проекте
-            $content = $content -replace '\\directx\\', 'directx\'
-            
-            Set-Content $proj.FullName $content -Encoding UTF8
-            Write-Host "Successfully patched project paths."
-        } else {
-            Write-Error "Main .vcxproj file not found outside of 'deps'!"
-            exit 1
+          Write-Host "Found project file to patch: $($proj.FullName)"
+          # Исправляем путь к файлу directx.cpp, поднимаясь на уровень выше из папки проекта (..\directx\)
+          (Get-Content $proj.FullName) -replace '\\directx\\', '..\directx\' | Set-Content $proj.FullName
+          Write-Host "Successfully patched directx paths."
+        }
+        else {
+          Write-Error "Main .vcxproj file not found outside of 'deps'!"
+          exit 1
         }
 
-    - name: Build
-      shell: pwsh
+    - name: Build Solution
+      shell: powershell
       run: |
-        # Ищем файл решения .sln только вашего проекта, игнорируя deps
-        $sln = Get-ChildItem -Recurse *.sln | Where-Object { $_.FullName -notmatch 'deps' } | Select -First 1
+        # Ищем файл решения .sln вашего проекта, игнорируя deps
+        $sln = Get-ChildItem -Recurse *.sln | Where-Object { $_.FullName -notmatch 'deps' } | Select-Object -First 1
+        
+        if ($sln) {
+          Write-Host "Found solution: $($sln.FullName)"
+          
+          # Готовим пути к инклудам (включая abseil из protobuf) и библиотекам.
+          # Разделители путей (;) обязательно экранируем как %3b, иначе MSBuild CLI падает с ошибкой MSB1006.
+          $IncludePaths = "$pwd\deps\protobuf\src%3b$pwd\deps\protobuf\third_party\abseil-cpp%3b$pwd\deps\freetype\include"
+          $LibraryPaths = "$pwd\deps\protobuf\build\Release%3b$pwd\deps\freetype\build\Release"
 
-        if (-not $sln) {
-            Write-Error "Main Solution file (.sln) not found!"
-            exit 1
+          # Конструкция %3b`$(IncludePath) в конце сохраняет стандартные пути Visual Studio/Windows SDK
+          msbuild $sln.FullName `
+            /m `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:PlatformToolset=v143 `
+            /p:VisualStudioVersion=17.0 `
+            "/p:IncludePath=$IncludePaths%3b`$(IncludePath)" `
+            "/p:LibraryPath=$LibraryPaths%3b`$(LibraryPath)"
+        }
+        else {
+          Write-Error "No .sln file found in the repository."
+          exit 1
         }
 
-        Write-Host "Building solution: $($sln.FullName)"
-
-        # Настраиваем переменные окружения процесса для компилятора cl.exe и линкера link.exe
-        $env:INCLUDE = "${{ github.workspace }}\deps\protobuf\src;${{ github.workspace }}\deps\freetype\include;" + $env:INCLUDE
-        $env:LIB = "${{ github.workspace }}\deps\protobuf\build\Release;${{ github.workspace }}\deps\freetype\build\Release;" + $env:LIB
-
-        # Чтобы передать пути со знаком ";" внутрь аргументов командной строки msbuild, 
-        # точку с запятой ОБЯЗАТЕЛЬНО нужно экранировать через URL-кодирование как "%3b".
-        # Иначе MSBuild падает с ошибкой MSB1006.
-        $IncludePaths = "${{ github.workspace }}\deps\protobuf\src%3b${{ github.workspace }}\deps\freetype\include"
-        $LibraryPaths = "${{ github.workspace }}\deps\protobuf\build\Release%3b${{ github.workspace }}\deps\freetype\build\Release"
-
-        msbuild $sln.FullName `
-          /m `
-          /p:Configuration=Release `
-          /p:Platform=x64 `
-          /p:PlatformToolset=v143 `
-          /p:VisualStudioVersion=17.0 `
-          "/p:IncludePath=$IncludePaths%3b`$(IncludePath)" `
-          "/p:LibraryPath=$LibraryPaths%3b`$(LibraryPath)"
-
-    - name: Upload
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: dll-build
         path: |
+          **/x64/Release/*.dll
           **/Release/*.dll
+        if-no-files-found: error
+Новый текстовый документ (2).txt
+4 кб
