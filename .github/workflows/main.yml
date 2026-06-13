@@ -35,25 +35,27 @@ jobs:
     - name: Fix project paths
       shell: pwsh
       run: |
-        # Ищем .vcxproj только вашего проекта, игнорируя папку deps
+        # Ищем файл .vcxproj только вашего проекта, игнорируя сгенерированные файлы в deps
         $proj = Get-ChildItem -Recurse *.vcxproj | Where-Object { $_.FullName -notmatch 'deps' } | Select -First 1
-        
+
         if ($proj) {
-            Write-Host "Editing project: $($proj.FullName)"
+            Write-Host "Working on project file: $($proj.FullName)"
             $content = Get-Content $proj.FullName -Raw
-            $content = $content -replace '\\directx\\directx.cpp','directx\directx.cpp'
-            Set-Content $proj.FullName $content
+            
+            # Удаляем ошибочный ведущий слэш у директории directx
+            $content = $content -replace 'Include="\\directx\\', 'Include="directx\'
+            
+            Set-Content $proj.FullName $content -Encoding UTF8
+            Write-Host "Successfully patched project paths."
         } else {
-            Write-Warning "No .vcxproj file found outside of 'deps' folder."
+            Write-Error "Main .vcxproj file not found outside of 'deps'!"
+            exit 1
         }
 
     - name: Build
       shell: pwsh
-      env:
-        INCLUDE: "${{ github.workspace }}\\deps\\protobuf\\src;${{ github.workspace }}\\deps\\freetype\\include;${env:INCLUDE}"
-        LIB: "${{ github.workspace }}\\deps\\protobuf\\build\\Release;${{ github.workspace }}\\deps\\freetype\\build\\Release;${env:LIB}"
       run: |
-        # Ищем .sln только вашего проекта, игнорируя папку deps
+        # Ищем файл решения .sln только вашего проекта, игнорируя deps
         $sln = Get-ChildItem -Recurse *.sln | Where-Object { $_.FullName -notmatch 'deps' } | Select -First 1
 
         if (-not $sln) {
@@ -63,12 +65,23 @@ jobs:
 
         Write-Host "Building solution: $($sln.FullName)"
 
-        msbuild $sln.FullName `
-          /m `
-          /p:Configuration=Release `
-          /p:Platform=x64 `
-          /p:PlatformToolset=v143 `
-          /p:VisualStudioVersion=17.0
+        # Настраиваем переменные окружения процесса для компилятора cl.exe
+        $env:INCLUDE = "${{ github.workspace }}\deps\protobuf\src;${{ github.workspace }}\deps\freetype\include;" + $env:INCLUDE
+        $env:LIB = "${{ github.workspace }}\deps\protobuf\build\Release;${{ github.workspace }}\deps\freetype\build\Release;" + $env:LIB
+
+        # Используем массив аргументов, чтобы избежать проблем с экранированием точек с запятой в PowerShell
+        $msbuildArgs = @(
+            $sln.FullName,
+            "/m",
+            "/p:Configuration=Release",
+            "/p:Platform=x64",
+            "/p:PlatformToolset=v143",
+            "/p:VisualStudioVersion=17.0",
+            "/p:IncludePath=${{ github.workspace }}\deps\protobuf\src;${{ github.workspace }}\deps\freetype\include;`$(IncludePath)",
+            "/p:LibraryPath=${{ github.workspace }}\deps\protobuf\build\Release;${{ github.workspace }}\deps\freetype\build\Release;`$(LibraryPath)"
+        )
+
+        & msbuild $msbuildArgs
 
     - name: Upload
       uses: actions/upload-artifact@v4
