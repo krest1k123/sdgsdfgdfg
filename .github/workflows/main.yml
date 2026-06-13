@@ -1,0 +1,38 @@
+name: Build C++ DLL
+
+# Запуск сборки при пуше в ветку main или вручную
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Использование виртуальной машины Windows
+    runs-on: windows-latest
+
+    steps:
+    # 1. Клонирование репозитория
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Добавление MSBuild в системный PATH
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    # 3. Восстановление NuGet пакетов (если они используются в проекте)
+    - name: Restore NuGet packages
+      run: nuget restore YourProjectName.sln
+
+    # 4. Компиляция проекта (сборка Release версии для x64)
+    - name: Build the solution
+      run: msbuild YourProjectName.sln /p:Configuration=Release /p:Platform=x64
+
+    # 5. Загрузка собранной DLL как артефакта, чтобы ее можно было скачать
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Compiled-DLL
+        path: x64/Release/*.dll # Укажите правильный путь к выходной папке
