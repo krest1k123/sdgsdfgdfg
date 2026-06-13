@@ -3,71 +3,51 @@ name: Build DLL
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Install dependencies
+    - name: Build Dependencies
       shell: powershell
       run: |
-        # Клонируем Protobuf и обязательно выкачиваем его подмодули (Abseil), чтобы папка third_party не была пустой
-        git clone --depth 1 https://github.com/protocolbuffers/protobuf.git deps/protobuf
-        cd deps/protobuf
-        git submodule update --init --recursive --depth 1
-        cd ..\..
-
+        # Клонируем зависимости (Protobuf сразу со всеми подмодулями Abseil)
+        git clone --depth 1 --recurse-submodules https://github.com/protocolbuffers/protobuf.git deps/protobuf
         git clone --depth 1 https://github.com/freetype/freetype.git deps/freetype
 
-        cmake -S deps/protobuf/cmake -B deps/protobuf/build `
-          -Dprotobuf_BUILD_TESTS=OFF `
-          -Dprotobuf_BUILD_SHARED_LIBS=OFF
-
+        # Собираем Protobuf
+        cmake -S deps/protobuf/cmake -B deps/protobuf/build -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_SHARED_LIBS=OFF
         cmake --build deps/protobuf/build --config Release
 
-        cmake -S deps/freetype -B deps/freetype/build `
-          -DFT_DISABLE_HARFBUZZ=ON
-
+        # Собираем FreeType
+        cmake -S deps/freetype -B deps/freetype/build -DFT_DISABLE_HARFBUZZ=ON
         cmake --build deps/freetype/build --config Release
 
-    - name: Fix project paths and inject includes
+    - name: Fix Project File
       shell: powershell
       run: |
-        $proj = Get-ChildItem -Recurse *.vcxproj | Where-Object { $_.FullName -notmatch 'deps' } | Select-First 1
-        if ($proj) {
-            Write-Host "Found project file: $($proj.FullName)"
-            $content = Get-Content $proj.FullName
-            
-            # 1. Исправляем путь к directx.cpp, чтобы он корректно выходил в корень репозитория (..\directx\)
-            $content = $content -replace 'Include="\\?directx\\directx\.cpp"', 'Include="..\directx\directx.cpp"'
-            
-            # 2. Напрямую внедряем пути к заголовочным файлам зависимостей внутрь настроек компилятора вашего .vcxproj
-            $content = $content -replace '<AdditionalIncludeDirectories>', '<AdditionalIncludeDirectories>$(SolutionDir)deps\protobuf\src;$(SolutionDir)deps\protobuf\third_party\abseil-cpp;$(SolutionDir)deps\freetype\include;'
-            
-            $content | Set-Content $proj.FullName
-            Write-Host "Project file successfully patched!"
-        } else {
-            Write-Error "No .vcxproj file found!"
-        }
+        # Читаем файл проекта, правим кривой путь к directx и вшиваем пути к инклудам библиотек
+        $xml = Get-Content darkside_sdk\darkside_sdk.vcxproj
+        $xml = $xml -replace '\\directx\\', '..\directx\'
+        $xml = $xml -replace '<AdditionalIncludeDirectories>', '<AdditionalIncludeDirectories>$(SolutionDir)deps\protobuf\src;$(SolutionDir)deps\protobuf\third_party\abseil-cpp;$(SolutionDir)deps\freetype\include;'
+        $xml | Set-Content darkside_sdk\darkside_sdk.vcxproj
 
     - name: Build Solution
-      shell: powershell
-      run: |
-        $sln = Get-ChildItem -Recurse *.sln | Where-Object { $_.FullName -notmatch 'deps' } | Select -First 1
-        if ($sln) {
-            msbuild $sln.FullName `
-              /m `
-              /p:Configuration=Release `
-              /p:Platform=x64 `
-              /p:PlatformToolset=v143 `
-              /p:VisualStudioVersion=17.0
-        } else {
-            Write-Error "No .sln file found!"
-        }
+      run: msbuild darkside_sdk.sln /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dll-build
+        path: |
+          **/x64/Release/*.dll
+          **/Release/*.dll
+        if-no-files-found: error
