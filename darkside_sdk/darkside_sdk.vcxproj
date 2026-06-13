@@ -73,7 +73,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)\output\$(Configuration)\</OutDir>
-    <IncludePath>$(ProjectDir)\sdk\includes\imgui\freetype\include;$(ProjectDir)sdk\includes\protobufs\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)sdk\includes\imgui\freetypes\include;$(ProjectDir)sdk\includes\imgui;$(IncludePath)</IncludePath> 
     <LibraryPath>$(ProjectDir)\sdk\includes\imgui\freetype;$(ProjectDir)\sdk\includes\imgui;$(ProjectDir)sdk\includes\protobufs\lib;$(LibraryPath)</LibraryPath>
     <IntDir>$(SolutionDir)\output\$(Configuration)\</IntDir>
   </PropertyGroup>
