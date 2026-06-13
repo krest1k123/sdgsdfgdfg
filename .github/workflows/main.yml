@@ -3,86 +3,71 @@ name: Build DLL
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Install Dependencies
+    - name: Install dependencies
       shell: powershell
       run: |
-        Write-Host "Cloning dependencies..."
-        # Клонируем Protobuf обязательно с подмодулями (--recurse-submodules), чтобы скачалась absl
-        git clone --depth 1 --recurse-submodules https://github.com/protocolbuffers/protobuf.git deps/protobuf
+        # Клонируем Protobuf и обязательно выкачиваем его подмодули (Abseil), чтобы папка third_party не была пустой
+        git clone --depth 1 https://github.com/protocolbuffers/protobuf.git deps/protobuf
+        cd deps/protobuf
+        git submodule update --init --recursive --depth 1
+        cd ..\..
+
         git clone --depth 1 https://github.com/freetype/freetype.git deps/freetype
 
-        Write-Host "Building Protobuf (Release)..."
-        cmake -S deps/protobuf/cmake -B deps/protobuf/build -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_SHARED_LIBS=OFF
+        cmake -S deps/protobuf/cmake -B deps/protobuf/build `
+          -Dprotobuf_BUILD_TESTS=OFF `
+          -Dprotobuf_BUILD_SHARED_LIBS=OFF
+
         cmake --build deps/protobuf/build --config Release
 
-        Write-Host "Building FreeType (Release)..."
-        cmake -S deps/freetype -B deps/freetype/build -DFT_DISABLE_HARFBUZZ=ON
+        cmake -S deps/freetype -B deps/freetype/build `
+          -DFT_DISABLE_HARFBUZZ=ON
+
         cmake --build deps/freetype/build --config Release
 
-    - name: Patch Project Paths
+    - name: Fix project paths and inject includes
       shell: powershell
       run: |
-        # Ищем главный файл .vcxproj вашего проекта, игнорируя сгенерированные файлы в deps
-        $proj = Get-ChildItem -Recurse *.vcxproj | Where-Object { $_.FullName -notmatch 'deps' } | Select-Object -First 1
-
+        $proj = Get-ChildItem -Recurse *.vcxproj | Where-Object { $_.FullName -notmatch 'deps' } | Select-First 1
         if ($proj) {
-          Write-Host "Found project file to patch: $($proj.FullName)"
-          # Исправляем путь к файлу directx.cpp, поднимаясь на уровень выше из папки проекта (..\directx\)
-          (Get-Content $proj.FullName) -replace '\\directx\\', '..\directx\' | Set-Content $proj.FullName
-          Write-Host "Successfully patched directx paths."
-        }
-        else {
-          Write-Error "Main .vcxproj file not found outside of 'deps'!"
-          exit 1
+            Write-Host "Found project file: $($proj.FullName)"
+            $content = Get-Content $proj.FullName
+            
+            # 1. Исправляем путь к directx.cpp, чтобы он корректно выходил в корень репозитория (..\directx\)
+            $content = $content -replace 'Include="\\?directx\\directx\.cpp"', 'Include="..\directx\directx.cpp"'
+            
+            # 2. Напрямую внедряем пути к заголовочным файлам зависимостей внутрь настроек компилятора вашего .vcxproj
+            $content = $content -replace '<AdditionalIncludeDirectories>', '<AdditionalIncludeDirectories>$(SolutionDir)deps\protobuf\src;$(SolutionDir)deps\protobuf\third_party\abseil-cpp;$(SolutionDir)deps\freetype\include;'
+            
+            $content | Set-Content $proj.FullName
+            Write-Host "Project file successfully patched!"
+        } else {
+            Write-Error "No .vcxproj file found!"
         }
 
     - name: Build Solution
       shell: powershell
       run: |
-        # Ищем файл решения .sln вашего проекта, игнорируя deps
-        $sln = Get-ChildItem -Recurse *.sln | Where-Object { $_.FullName -notmatch 'deps' } | Select-Object -First 1
-        
+        $sln = Get-ChildItem -Recurse *.sln | Where-Object { $_.FullName -notmatch 'deps' } | Select -First 1
         if ($sln) {
-          Write-Host "Found solution: $($sln.FullName)"
-          
-          # Готовим пути к инклудам (включая abseil из protobuf) и библиотекам.
-          # Разделители путей (;) обязательно экранируем как %3b, иначе MSBuild CLI падает с ошибкой MSB1006.
-          $IncludePaths = "$pwd\deps\protobuf\src%3b$pwd\deps\protobuf\third_party\abseil-cpp%3b$pwd\deps\freetype\include"
-          $LibraryPaths = "$pwd\deps\protobuf\build\Release%3b$pwd\deps\freetype\build\Release"
-
-          # Конструкция %3b`$(IncludePath) в конце сохраняет стандартные пути Visual Studio/Windows SDK
-          msbuild $sln.FullName `
-            /m `
-            /p:Configuration=Release `
-            /p:Platform=x64 `
-            /p:PlatformToolset=v143 `
-            /p:VisualStudioVersion=17.0 `
-            "/p:IncludePath=$IncludePaths%3b`$(IncludePath)" `
-            "/p:LibraryPath=$LibraryPaths%3b`$(LibraryPath)"
+            msbuild $sln.FullName `
+              /m `
+              /p:Configuration=Release `
+              /p:Platform=x64 `
+              /p:PlatformToolset=v143 `
+              /p:VisualStudioVersion=17.0
+        } else {
+            Write-Error "No .sln file found!"
         }
-        else {
-          Write-Error "No .sln file found in the repository."
-          exit 1
-        }
-
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dll-build
-        path: |
-          **/x64/Release/*.dll
-          **/Release/*.dll
-        if-no-files-found: error
