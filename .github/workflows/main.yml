@@ -18,24 +18,14 @@ jobs:
     - name: Fix project paths
       shell: powershell
       run: |
-        # Прямая правка пути без поиска файла vcxproj
+        # Прямая замена кривого пути в vcxproj без поиска файлов
         (Get-Content darkside_sdk\darkside_sdk.vcxproj) -replace '\\directx\\directx.cpp','directx\directx.cpp' | Set-Content darkside_sdk\darkside_sdk.vcxproj
 
     - name: Build
-      shell: powershell
-      run: |
-        # Прямой запуск msbuild для конкретного файла .sln
-        msbuild darkside_sdk.sln `
-          /m `
-          /p:Configuration=Release `
-          /p:Platform=x64 `
-          /p:PlatformToolset=v143 `
-          /p:VisualStudioVersion=17.0 `
-          /p:IncludePath="$pwd\deps\protobuf\src;$pwd\deps\freetype\include"
+      run: msbuild darkside_sdk.sln /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:VisualStudioVersion=17.0
 
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
         name: dll-build
-        path: |
-          **/Release/*.dll
+        path: "**/Release/*.dll"
