@@ -16,7 +16,7 @@ jobs:
       uses: microsoft/setup-msbuild@v2
 
     - name: Install dependencies
-      shell: powershell
+      shell: pwsh
       run: |
         git clone --depth 1 https://github.com/protocolbuffers/protobuf.git deps/protobuf
         git clone --depth 1 https://github.com/freetype/freetype.git deps/freetype
@@ -33,24 +33,35 @@ jobs:
         cmake --build deps/freetype/build --config Release
 
     - name: Fix project paths
-      shell: powershell
+      shell: pwsh
       run: |
-        $proj = Get-ChildItem -Recurse *.vcxproj | Select -First 1
+        # Ищем .vcxproj только вашего проекта, игнорируя папку deps
+        $proj = Get-ChildItem -Recurse *.vcxproj | Where-Object { $_.FullName -notmatch 'deps' } | Select -First 1
         
-        # Читаем весь файл в память как одну строку
-        $content = Get-Content $proj.FullName -Raw
-        
-        # Делаем замену и сохраняем обратно с правильной кодировкой UTF-8
-        $content -replace '\\directx\\directx.cpp','directx\directx.cpp' | Set-Content $proj.FullName -Encoding UTF8
+        if ($proj) {
+            Write-Host "Editing project: $($proj.FullName)"
+            $content = Get-Content $proj.FullName -Raw
+            $content = $content -replace '\\directx\\directx.cpp','directx\directx.cpp'
+            Set-Content $proj.FullName $content
+        } else {
+            Write-Warning "No .vcxproj file found outside of 'deps' folder."
+        }
 
     - name: Build
-      shell: powershell
+      shell: pwsh
       env:
-        # Устанавливаем пути через переменные окружения, чтобы избежать ошибки MSB1006
         INCLUDE: "${{ github.workspace }}\\deps\\protobuf\\src;${{ github.workspace }}\\deps\\freetype\\include;${env:INCLUDE}"
         LIB: "${{ github.workspace }}\\deps\\protobuf\\build\\Release;${{ github.workspace }}\\deps\\freetype\\build\\Release;${env:LIB}"
       run: |
-        $sln = Get-ChildItem -Recurse *.sln | Select -First 1
+        # Ищем .sln только вашего проекта, игнорируя папку deps
+        $sln = Get-ChildItem -Recurse *.sln | Where-Object { $_.FullName -notmatch 'deps' } | Select -First 1
+
+        if (-not $sln) {
+            Write-Error "Main Solution file (.sln) not found!"
+            exit 1
+        }
+
+        Write-Host "Building solution: $($sln.FullName)"
 
         msbuild $sln.FullName `
           /m `
