@@ -159,7 +159,7 @@
       <AdditionalDependencies>libprotobuf.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
+   <ItemGroup>
     <ClCompile Include="directx\directx.cpp" />
     <ClCompile Include="entity_system\entity.cpp" />
     <ClCompile Include="entry.cpp" />
@@ -187,7 +187,6 @@
     <ClCompile Include="sdk\includes\imgui\imgui_tables.cpp" />
     <ClCompile Include="sdk\includes\imgui\imgui_widgets.cpp" />
     <ClCompile Include="sdk\typedefs\vec3_t.cpp" />
-    <ClCompile Include="sdk\typedefs\vec_t.hpp" />
     <ClCompile Include="utils\utils.cpp" />
     <ClCompile Include="valve\interfaces\vtables\cs_usercmd.pb.cc" />
     <ClCompile Include="valve\interfaces\vtables\i_convar.cpp" />
@@ -198,14 +197,8 @@
     <ClCompile Include="valve\interfaces\vtables\source2_steam_stats.pb.cc" />
     <ClCompile Include="valve\interfaces\vtables\usercmd.pb.cc" />
     <ClCompile Include="valve\interfaces\vtables\usermessages.pb.cc" />
-    <ClCompile Include="valve\schema\schema.cpp" />
-    <ClCompile Include="sdk\includes\minhook\buffer.c" />
-    <ClCompile Include="sdk\includes\minhook\hde\hde32.c" />
-    <ClCompile Include="sdk\includes\minhook\hde\hde64.c" />
-    <ClCompile Include="sdk\includes\minhook\hook.c" />
-    <ClCompile Include="sdk\includes\minhook\trampoline.c" />
-    <ClCompile Include="valve\interfaces\interfaces.cpp" />
     <ClCompile Include="valve\modules\modules.cpp" />
+    <ClCompile Include="valve\schema\schema.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="darkside.hpp" />
