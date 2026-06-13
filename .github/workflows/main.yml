@@ -1,43 +1,67 @@
-name: Build C++ DLL
+name: Build DLL
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Install vcpkg + protobuf
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE 'vcpkg'
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
 
-          if (!(Test-Path $vcpkgRoot)) {
-            git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
-          }
+    - name: Setup vcpkg
+      shell: powershell
+      run: |
+        git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+        C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+        C:\vcpkg\vcpkg.exe install protobuf:x64-windows freetype:x64-windows
+        C:\vcpkg\vcpkg.exe integrate install
 
-          & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
-          & "$vcpkgRoot\vcpkg.exe" install protobuf:x64-windows
-          & "$vcpkgRoot\vcpkg.exe" integrate install
+    - name: Find Solution
+      shell: powershell
+      run: |
+        $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
 
-      - name: Build
-        shell: cmd
-        run: msbuild darkside_sdk.sln /m /p:Configuration=Release /p:Platform=x64
+        if (!$sln) {
+          Write-Error "No .sln file found"
+          exit 1
+        }
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: darkside_sdk-release
-          path: output\Release\*.dll
-          if-no-files-found: error
+        echo "SOLUTION=$($sln.FullName)" >> $env:GITHUB_ENV
+        Write-Host "Found solution:"
+        Write-Host $sln.FullName
+
+    - name: Build Solution
+      shell: powershell
+      run: |
+        msbuild "$env:SOLUTION" `
+          /m `
+          /p:Configuration=Release `
+          /p:Platform=x64 `
+          /p:PlatformToolset=v143 `
+          /p:VisualStudioVersion=17.0
+
+    - name: Search DLL
+      shell: powershell
+      run: |
+        Get-ChildItem -Recurse -Filter *.dll | Select FullName
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dll-build
+        path: |
+          **/x64/Release/*.dll
+          **/Release/*.dll
+          **/output/Release/*.dll
+        if-no-files-found: error
