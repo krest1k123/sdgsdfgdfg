@@ -42,8 +42,8 @@ jobs:
             Write-Host "Working on project file: $($proj.FullName)"
             $content = Get-Content $proj.FullName -Raw
             
-            # Удаляем ошибочный ведущий слэш у директории directx
-            $content = $content -replace 'Include="\\directx\\', 'Include="directx\'
+            # Заменяем все ошибочные пути вида \directx\ на относительные directx\ везде в проекте
+            $content = $content -replace '\\directx\\', 'directx\'
             
             Set-Content $proj.FullName $content -Encoding UTF8
             Write-Host "Successfully patched project paths."
@@ -65,23 +65,24 @@ jobs:
 
         Write-Host "Building solution: $($sln.FullName)"
 
-        # Настраиваем переменные окружения процесса для компилятора cl.exe
+        # Настраиваем переменные окружения процесса для компилятора cl.exe и линкера link.exe
         $env:INCLUDE = "${{ github.workspace }}\deps\protobuf\src;${{ github.workspace }}\deps\freetype\include;" + $env:INCLUDE
         $env:LIB = "${{ github.workspace }}\deps\protobuf\build\Release;${{ github.workspace }}\deps\freetype\build\Release;" + $env:LIB
 
-        # Используем массив аргументов, чтобы избежать проблем с экранированием точек с запятой в PowerShell
-        $msbuildArgs = @(
-            $sln.FullName,
-            "/m",
-            "/p:Configuration=Release",
-            "/p:Platform=x64",
-            "/p:PlatformToolset=v143",
-            "/p:VisualStudioVersion=17.0",
-            "/p:IncludePath=${{ github.workspace }}\deps\protobuf\src;${{ github.workspace }}\deps\freetype\include;`$(IncludePath)",
-            "/p:LibraryPath=${{ github.workspace }}\deps\protobuf\build\Release;${{ github.workspace }}\deps\freetype\build\Release;`$(LibraryPath)"
-        )
+        # Чтобы передать пути со знаком ";" внутрь аргументов командной строки msbuild, 
+        # точку с запятой ОБЯЗАТЕЛЬНО нужно экранировать через URL-кодирование как "%3b".
+        # Иначе MSBuild падает с ошибкой MSB1006.
+        $IncludePaths = "${{ github.workspace }}\deps\protobuf\src%3b${{ github.workspace }}\deps\freetype\include"
+        $LibraryPaths = "${{ github.workspace }}\deps\protobuf\build\Release%3b${{ github.workspace }}\deps\freetype\build\Release"
 
-        & msbuild $msbuildArgs
+        msbuild $sln.FullName `
+          /m `
+          /p:Configuration=Release `
+          /p:Platform=x64 `
+          /p:PlatformToolset=v143 `
+          /p:VisualStudioVersion=17.0 `
+          "/p:IncludePath=$IncludePaths%3b`$(IncludePath)" `
+          "/p:LibraryPath=$LibraryPaths%3b`$(LibraryPath)"
 
     - name: Upload
       uses: actions/upload-artifact@v4
