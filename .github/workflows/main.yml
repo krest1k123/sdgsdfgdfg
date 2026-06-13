@@ -17,7 +17,7 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Bootstrap vcpkg
+      - name: Install vcpkg + protobuf
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -28,32 +28,12 @@ jobs:
           }
 
           & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
-          & "$vcpkgRoot\vcpkg.exe" install protobuf:x64-windows freetype:x64-windows
+          & "$vcpkgRoot\vcpkg.exe" install protobuf:x64-windows
+          & "$vcpkgRoot\vcpkg.exe" integrate install
 
       - name: Build
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $repo = $env:GITHUB_WORKSPACE
-          $vcpkgRoot = Join-Path $repo 'vcpkg'
-
-          $includeDirs = @(
-            "$repo\darkside_sdk\sdk\includes\imgui\freetype\include"
-            "$repo\darkside_sdk\sdk\includes\imgui"
-            "$vcpkgRoot\installed\x64-windows\include"
-          ) -join ';'
-
-          $libraryDirs = @(
-            "$repo\darkside_sdk\sdk\includes\imgui\freetype"
-            "$repo\darkside_sdk\sdk\includes\imgui"
-            "$vcpkgRoot\installed\x64-windows\lib"
-          ) -join ';'
-
-          msbuild "$repo\darkside_sdk.sln" /m `
-            /p:Configuration=Release `
-            /p:Platform=x64 `
-            /p:AdditionalIncludeDirectories="$includeDirs" `
-            /p:AdditionalLibraryDirectories="$libraryDirs"
+        shell: cmd
+        run: msbuild darkside_sdk.sln /m /p:Configuration=Release /p:Platform=x64
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
