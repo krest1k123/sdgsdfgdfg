@@ -1,31 +1,36 @@
-name: Build DLL
+name: Build DarkSide SDK DLL
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    - name: Fix project paths
-      shell: powershell
+    - name: Fix paths before build
+      shell: pwsh
       run: |
-        # Прямая замена кривого пути в vcxproj без поиска файлов
-        (Get-Content darkside_sdk\darkside_sdk.vcxproj) -replace '\\directx\\directx.cpp','directx\directx.cpp' | Set-Content darkside_sdk\darkside_sdk.vcxproj
+        $proj = "darkside_sdk/darkside_sdk.vcxproj"
+        (Get-Content $proj) -replace 'freetype', 'freetypes' | Set-Content $proj
+        (Get-Content $proj) -replace '<ClCompile Include="/', '<ClCompile Include="' | Set-Content $proj
 
-    - name: Build
-      run: msbuild darkside_sdk.sln /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:VisualStudioVersion=17.0
+    - name: Build Release x64
+      run: |
+        msbuild darkside_sdk.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal
 
-    - name: Upload
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: dll-build
-        path: "**/Release/*.dll"
+        name: DarkSide-DLL-x64
+        path: output/Release/*.dll
